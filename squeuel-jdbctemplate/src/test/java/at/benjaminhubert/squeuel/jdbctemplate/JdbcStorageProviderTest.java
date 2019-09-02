@@ -437,6 +437,20 @@ public class JdbcStorageProviderTest {
     }
 
     @Test
+    void lockEvent_doesNotLockAlreadyProcessedEvent() {
+        // prepare
+        DatabaseTables tables = createTables();
+        JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
+
+        // perform
+        insertEvent(tables, 1L, "queue_1", "partition_1", "data", now().minus(4, ChronoUnit.MINUTES), true);
+        boolean locked = storageProvider.lockEvent(1L, now().plusHours(1));
+
+        // check
+        assertThat(locked, equalTo(false));
+    }
+
+    @Test
     void lockEvent_validatesParameters() {
         // prepare
         DatabaseTables tables = createTables();

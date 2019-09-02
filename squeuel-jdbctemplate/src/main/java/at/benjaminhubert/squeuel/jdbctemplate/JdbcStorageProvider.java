@@ -138,7 +138,8 @@ public class JdbcStorageProvider implements StorageProvider {
         String sql = "INSERT INTO " + lockTable + " (queue, partition, locked_until_utc)" +
                 " SELECT e.queue, e.partition, :locked_until_utc AS locked_until_utc " +
                 " FROM " + eventTable + " e" +
-                " WHERE e.id = :event_id ";
+                " WHERE e.id = :event_id " +
+                " AND e.processed = FALSE ";
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("event_id", eventId)
                 .addValue("locked_until_utc", Timestamp.valueOf(lockUntilUtc));
