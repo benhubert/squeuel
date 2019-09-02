@@ -7,7 +7,9 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.temporal.TemporalAmount;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
 public class DefaultQueueService implements QueueService {
 
@@ -34,25 +36,26 @@ public class DefaultQueueService implements QueueService {
         if (eventHandler == null) throw new IllegalArgumentException("Event handler is required but was " + eventHandler);
 
         List<Event> events = storageProvider.findNextAvailableEvents(queue, batchSize);
-        events.forEach(event -> {
-            long starttime = System.currentTimeMillis();
-            LOG.info("TIME       start " + (System.currentTimeMillis() - starttime));
-            LocalDateTime lockUntilUtc = LocalDateTime.now(Clock.systemUTC()).plus(maxLockTime);
-            try {
-                LOG.info("TIME before lock " + (System.currentTimeMillis() - starttime));
-                if (storageProvider.lockEvent(event.getId(), lockUntilUtc)) {
-                    LOG.info("TIME  after lock " + (System.currentTimeMillis() - starttime));
+
+        Map<String, List<Event>> eventsByPartition = events.stream().collect(Collectors.groupingBy(Event::getPartition));
+        eventsByPartition.forEach((partition, eventsOfPartition) -> handleEventsOfPartition(eventsOfPartition, maxLockTime, eventHandler));
+    }
+
+    private void handleEventsOfPartition(List<Event> events, TemporalAmount maxLockTime, EventHandler eventHandler) {
+        Event firstEvent = events.get(0);
+        String partition = firstEvent.getPartition();
+        LocalDateTime lockUntilUtc = LocalDateTime.now(Clock.systemUTC()).plus(maxLockTime);
+        try {
+            if (storageProvider.lockPartition(firstEvent.getId(), lockUntilUtc)) {
+                events.forEach((event) -> {
                     eventHandler.handle(event);
-                    LOG.info("TIME after handl " + (System.currentTimeMillis() - starttime));
                     storageProvider.markAsProcessed(event.getId());
-                    LOG.info("TIME marked proc " + (System.currentTimeMillis() - starttime));
-                } else {
-                    LOG.info("TIME lock missed " + (System.currentTimeMillis() - starttime));
-                }
-            } catch (Exception e) {
-                LOG.error("Failed to process event. Will retry after {}", lockUntilUtc);
+                });
+                storageProvider.unlockPartition(firstEvent.getId());
             }
-        });
+        } catch (Exception e) {
+            LOG.error("Failed to process an event in partition {}. Will retry after {}", partition, lockUntilUtc);
+        }
     }
 
     @Override

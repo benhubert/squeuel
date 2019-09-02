@@ -1,14 +1,13 @@
 package at.benjaminhubert.squeuel.jdbctemplate;
 
 import at.benjaminhubert.squeuel.core.Event;
+import at.benjaminhubert.squeuel.testutils.Database;
+import at.benjaminhubert.squeuel.testutils.DatabaseTables;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
-import org.testcontainers.containers.PostgreSQLContainer;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -25,20 +24,11 @@ import static org.junit.jupiter.api.TestInstance.Lifecycle.*;
 @TestInstance(PER_CLASS)
 public class JdbcStorageProviderTest {
 
-    private PostgreSQLContainer database;
-    private JdbcTemplate jdbcTemplate;
+    private Database database;
 
     @BeforeAll
     void startupDatabase() {
-        database = new PostgreSQLContainer("postgres:11");
-        database.start();
-        DriverManagerDataSource driverManagerDataSource = new DriverManagerDataSource();
-        driverManagerDataSource.setUrl(database.getJdbcUrl());
-        driverManagerDataSource.setUsername(database.getUsername());
-        driverManagerDataSource.setPassword(database.getPassword());
-        driverManagerDataSource.setDriverClassName(database.getDriverClassName());
-        jdbcTemplate = new JdbcTemplate();
-        jdbcTemplate.setDataSource(driverManagerDataSource);
+        this.database = Database.createPostgresDatabase();
     }
 
     @AfterAll
@@ -46,34 +36,14 @@ public class JdbcStorageProviderTest {
         database.stop();
     }
 
-    private DatabaseTables createTables() {
-        DatabaseTables tables = new DatabaseTables();
-        jdbcTemplate.execute("CREATE TABLE " + tables.event() + " ( " +
-                "  id BIGSERIAL PRIMARY KEY, " +
-                "  queue VARCHAR(64) NOT NULL, " +
-                "  partition VARCHAR(64) NOT NULL, " +
-                "  created_utc TIMESTAMP WITHOUT TIME ZONE NOT NULL, " +
-                "  data TEXT, " +
-                "  processed BOOLEAN NOT NULL " +
-                " )");
-        jdbcTemplate.execute("CREATE TABLE " + tables.lock() + " ( " +
-                "  id BIGSERIAL PRIMARY KEY, " +
-                "  queue VARCHAR(64) NOT NULL, " +
-                "  partition VARCHAR(64) NOT NULL, " +
-                "  locked_until_utc TIMESTAMP WITHOUT TIME ZONE NOT NULL, " +
-                "  UNIQUE (queue, partition)  " +
-                " )");
-        return tables;
-    }
-
     private JdbcStorageProvider initializeStorageProvider(DatabaseTables tables) {
-        return new JdbcStorageProvider(jdbcTemplate, tables.event(), tables.lock());
+        return new JdbcStorageProvider(database.getJdbcTemplate(), tables.event(), tables.lock());
     }
 
     @Test
     void saveEvent_savesEventAsExpected() {
         // prepare
-        DatabaseTables tables = createTables();
+        DatabaseTables tables = database.createTables();
         JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
 
         // perform
@@ -94,7 +64,7 @@ public class JdbcStorageProviderTest {
     @Test
     void saveEvent_savesMultipleEvents() {
         // prepare
-        DatabaseTables tables = createTables();
+        DatabaseTables tables = database.createTables();
         JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
 
         // perform
@@ -110,7 +80,7 @@ public class JdbcStorageProviderTest {
     @Test
     void saveEvent_savesEventsAtColumnLimits() {
         // prepare
-        DatabaseTables tables = createTables();
+        DatabaseTables tables = database.createTables();
         JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
 
         // perform
@@ -127,7 +97,7 @@ public class JdbcStorageProviderTest {
     @Test
     void saveEvent_validatesParameters() {
         // prepare
-        DatabaseTables tables = createTables();
+        DatabaseTables tables = database.createTables();
         JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
 
         // perform
@@ -145,7 +115,7 @@ public class JdbcStorageProviderTest {
     @Test
     void saveEvent_withEmptyDataIsAllowed() {
         // prepare
-        DatabaseTables tables = createTables();
+        DatabaseTables tables = database.createTables();
         JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
 
         // perform
@@ -161,7 +131,7 @@ public class JdbcStorageProviderTest {
     @Test
     void findNextAvailableEvents_returnsOnlyRequestedBatchSize() {
         // prepare
-        DatabaseTables tables = createTables();
+        DatabaseTables tables = database.createTables();
         JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
         insertEvent(tables, 1L, "queue_1", "partition_1", "data", now().minus(5, ChronoUnit.MINUTES), false);
         insertEvent(tables, 2L, "queue_1", "partition_2", "data", now().minus(4, ChronoUnit.MINUTES), false);
@@ -182,7 +152,7 @@ public class JdbcStorageProviderTest {
     @Test
     void findNextAvailableEvents_returnsNoLockedEvents() {
         // prepare
-        DatabaseTables tables = createTables();
+        DatabaseTables tables = database.createTables();
         JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
         insertEvent(tables, 1L, "queue_1", "partition_1", "data", now().minus(5, ChronoUnit.MINUTES), false);
         insertEvent(tables, 2L, "queue_1", "partition_2", "data", now().minus(4, ChronoUnit.MINUTES), false);
@@ -204,7 +174,7 @@ public class JdbcStorageProviderTest {
     @Test
     void findNextAvailableEvents_returnsNoEventsOfALockedPartition() {
         // prepare
-        DatabaseTables tables = createTables();
+        DatabaseTables tables = database.createTables();
         JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
         insertEvent(tables, 1L, "queue_1", "partition_1", "data", now().minus(5, ChronoUnit.MINUTES), false);
         insertEvent(tables, 2L, "queue_1", "partition_2", "data", now().minus(4, ChronoUnit.MINUTES), false);
@@ -224,7 +194,7 @@ public class JdbcStorageProviderTest {
     @Test
     void findNextAvailableEvents_returnsEventsOfAPartitionWhichHasTheSameNameAsALockedPartitionOfAnotherQueue() {
         // prepare
-        DatabaseTables tables = createTables();
+        DatabaseTables tables = database.createTables();
         JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
         insertEvent(tables, 1L, "queue_1", "partition_1", "data", now().minus(5, ChronoUnit.MINUTES), false);
         insertEvent(tables, 2L, "queue_2", "partition_2", "data", now().minus(4, ChronoUnit.MINUTES), false);
@@ -247,7 +217,7 @@ public class JdbcStorageProviderTest {
     @Test
     void findNextAvailableEvents_doesNotReturnAlreadyProcessedEvents() {
         // prepare
-        DatabaseTables tables = createTables();
+        DatabaseTables tables = database.createTables();
         JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
         insertEvent(tables, 1L, "queue_1", "partition_1", "data", now().minus(5, ChronoUnit.MINUTES), true);
         insertEvent(tables, 2L, "queue_1", "partition_2", "data", now().minus(4, ChronoUnit.MINUTES), false);
@@ -265,7 +235,7 @@ public class JdbcStorageProviderTest {
     @Test
     void findNextAvailableEvents_returnsEventsInCorrectOrder() {
         // prepare
-        DatabaseTables tables = createTables();
+        DatabaseTables tables = database.createTables();
         JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
         insertEvent(tables, 1L, "queue_1", "partition_1", "data", now().minus(4, ChronoUnit.MINUTES), false);
         insertEvent(tables, 2L, "queue_1", "partition_2", "data", now().minus(3, ChronoUnit.MINUTES), false);
@@ -284,7 +254,7 @@ public class JdbcStorageProviderTest {
     @Test
     void findNextAvailableEvents_ReturnsEventsWithOutdatedLocks() {
         // prepare
-        DatabaseTables tables = createTables();
+        DatabaseTables tables = database.createTables();
         JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
         insertEvent(tables, 1L, "queue_1", "partition_1", "data", now().minus(4, ChronoUnit.HOURS), false);
         insertEvent(tables, 2L, "queue_1", "partition_2", "data", now().minus(3, ChronoUnit.HOURS), false);
@@ -302,7 +272,7 @@ public class JdbcStorageProviderTest {
     @Test
     void findNextAvailableEvents_validatesParameters() {
         // prepare
-        DatabaseTables tables = createTables();
+        DatabaseTables tables = database.createTables();
         JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
 
         // perform
@@ -315,14 +285,14 @@ public class JdbcStorageProviderTest {
     }
 
     @Test
-    void lockEvent_insertsLockAsExpected() {
+    void lockPartition_insertsLockAsExpected() {
         // prepare
-        DatabaseTables tables = createTables();
+        DatabaseTables tables = database.createTables();
         JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
         insertEvent(tables, 12L, "queue_1", "partition_1", "data", now().minus(4, ChronoUnit.MINUTES), false);
 
         // perform
-        Boolean locked = storageProvider.lockEvent(12L, now().plusHours(1));
+        Boolean locked = storageProvider.lockPartition(12L, now().plusHours(1));
 
         // check
         assertThat(locked, equalTo(true));
@@ -334,15 +304,15 @@ public class JdbcStorageProviderTest {
     }
 
     @Test
-    void lockEvent_doesNotLockIfAlreadyLocked() {
+    void lockPartition_doesNotLockIfAlreadyLocked() {
         // prepare
-        DatabaseTables tables = createTables();
+        DatabaseTables tables = database.createTables();
         JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
         insertEvent(tables, 12L, "queue_1", "partition_1", "data", now().minus(4, ChronoUnit.MINUTES), false);
         insertLock(tables, 233L, "queue_1", "partition_1", now().plusHours(1));
 
         // perform
-        Boolean locked = storageProvider.lockEvent(12L, now().plusHours(2));
+        Boolean locked = storageProvider.lockPartition(12L, now().plusHours(2));
 
         // check
         assertThat(locked, equalTo(false));
@@ -355,13 +325,13 @@ public class JdbcStorageProviderTest {
     }
 
     @Test
-    void lockEvent_doesNotLockAnythingIfEventDoesNotExist() {
+    void lockPartition_doesNotLockAnythingIfEventDoesNotExist() {
         // prepare
-        DatabaseTables tables = createTables();
+        DatabaseTables tables = database.createTables();
         JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
 
         // perform
-        Boolean locked = storageProvider.lockEvent(12L, now().plusHours(2));
+        Boolean locked = storageProvider.lockPartition(12L, now().plusHours(2));
 
         // check
         assertThat(locked, equalTo(false));
@@ -370,15 +340,15 @@ public class JdbcStorageProviderTest {
     }
 
     @Test
-    void lockEvent_locksIfPrevoiusLockIsAlreadyOutdated() {
+    void lockPartition_locksIfPrevoiusLockIsAlreadyOutdated() {
         // prepare
-        DatabaseTables tables = createTables();
+        DatabaseTables tables = database.createTables();
         JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
         insertEvent(tables, 73L, "queue_1", "partition_1", "data", now().minus(4, ChronoUnit.MINUTES), false);
         insertLock(tables, 233L, "queue_1", "partition_1", now().minusHours(1));
 
         // perform
-        Boolean locked = storageProvider.lockEvent(73L, now().plusHours(2));
+        Boolean locked = storageProvider.lockPartition(73L, now().plusHours(2));
 
         // check
         assertThat(locked, equalTo(true));
@@ -391,14 +361,14 @@ public class JdbcStorageProviderTest {
     }
 
     @Test
-    void lockEvent_doesNotLockAlreadyProcessedEvent() {
+    void lockPartition_doesNotLockAlreadyProcessedEvent() {
         // prepare
-        DatabaseTables tables = createTables();
+        DatabaseTables tables = database.createTables();
         JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
 
         // perform
         insertEvent(tables, 1L, "queue_1", "partition_1", "data", now().minus(4, ChronoUnit.MINUTES), true);
-        boolean locked = storageProvider.lockEvent(1L, now().plusHours(1));
+        boolean locked = storageProvider.lockPartition(1L, now().plusHours(1));
 
         // check
         assertThat(locked, equalTo(false));
@@ -407,19 +377,19 @@ public class JdbcStorageProviderTest {
     @Test
     void lockEvent_validatesParameters() {
         // prepare
-        DatabaseTables tables = createTables();
+        DatabaseTables tables = database.createTables();
         JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
 
         // perform
-        assertThrows(IllegalArgumentException.class, () -> storageProvider.lockEvent(null, now()));
-        assertThrows(IllegalArgumentException.class, () -> storageProvider.lockEvent(123L, null));
-        assertThrows(IllegalArgumentException.class, () -> storageProvider.lockEvent(123L, now().minusMinutes(1)));
+        assertThrows(IllegalArgumentException.class, () -> storageProvider.lockPartition(null, now()));
+        assertThrows(IllegalArgumentException.class, () -> storageProvider.lockPartition(123L, null));
+        assertThrows(IllegalArgumentException.class, () -> storageProvider.lockPartition(123L, now().minusMinutes(1)));
     }
 
     @Test
     void markAsProcessed_marksEventAsProcessed() {
         // prepare
-        DatabaseTables tables = createTables();
+        DatabaseTables tables = database.createTables();
         JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
         insertEvent(tables, 73L, "queue_1", "partition_1", "data", now(), false);
 
@@ -437,7 +407,7 @@ public class JdbcStorageProviderTest {
     @Test
     void markAsProcessed_doesNothingIfEventAlreadyMarkedProcessed() {
         // prepare
-        DatabaseTables tables = createTables();
+        DatabaseTables tables = database.createTables();
         JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
         insertEvent(tables, 73L, "queue_1", "partition_1", "data", now(), true);
 
@@ -455,7 +425,7 @@ public class JdbcStorageProviderTest {
     @Test
     void markAsProcessed_validatesParameters() {
         // prepare
-        DatabaseTables tables = createTables();
+        DatabaseTables tables = database.createTables();
         JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
 
         // perform
@@ -475,7 +445,8 @@ public class JdbcStorageProviderTest {
                              String data,
                              LocalDateTime createdUtc,
                              Boolean processed) {
-        jdbcTemplate.update("INSERT INTO " + tables.event() +
+        database.getJdbcTemplate()
+                .update("INSERT INTO " + tables.event() +
                 " (id, queue, partition, data, created_utc, processed) " +
                 " VALUES (?, ?, ?, ?, ?, ?)", id, queue, partition, data, Timestamp.valueOf(createdUtc), processed);
     }
@@ -485,17 +456,18 @@ public class JdbcStorageProviderTest {
                             String queue,
                             String partition,
                             LocalDateTime lockUntil) {
-        jdbcTemplate.update("INSERT INTO " + tables.lock() + " " +
+        database.getJdbcTemplate()
+                .update("INSERT INTO " + tables.lock() + " " +
                 " (id, queue, partition, locked_until_utc) " +
                 " VALUES (?, ?, ?, ?)", lockId, queue, partition, Timestamp.valueOf(lockUntil));
     }
 
     private List<EventRow> fetchEventsFromDatabase(DatabaseTables tables) {
-        return jdbcTemplate.query("SELECT * FROM " + tables.event(), new EventRowMapper());
+        return database.getJdbcTemplate().query("SELECT * FROM " + tables.event(), new EventRowMapper());
     }
 
     private List<LockRow> fetchLocksFromDatabase(DatabaseTables tables) {
-        return jdbcTemplate.query("SELECT * FROM " + tables.lock(), new LockRowMapper());
+        return database.getJdbcTemplate().query("SELECT * FROM " + tables.lock(), new LockRowMapper());
     }
 
     private static class EventRowMapper implements RowMapper<EventRow> {

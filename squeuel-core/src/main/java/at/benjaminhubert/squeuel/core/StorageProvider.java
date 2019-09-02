@@ -31,14 +31,22 @@ public interface StorageProvider {
     List<Event> findNextAvailableEvents(String queue, Integer batchSize);
 
     /**
-     * Tries to get a lock for the given event. Makes sure that the event is
-     * not already locked and that the event has not been processed before.
+     * Tries to get a lock for the partition of the given event. Makes sure that
+     * the partition is not already locked and that the event has not been
+     * processed before.
      *
      * @param eventId The ID of the event to lock.
-     * @param lockUntilUtc Timestamp, until this event should be locked.
-     * @return True, if the event has been locked. False if not.
+     * @param lockUntilUtc Timestamp, until this partition should be locked.
+     * @return True, if the partition has been locked. False if not.
      */
-    boolean lockEvent(Long eventId, LocalDateTime lockUntilUtc);
+    boolean lockPartition(Long eventId, LocalDateTime lockUntilUtc);
+
+    /**
+     * Removes any existing lock for the given partition.
+     *
+     * @param eventId The ID of the event to unlock.
+     */
+    void unlockPartition(Long eventId);
 
     /**
      * Marks the given event as processed.

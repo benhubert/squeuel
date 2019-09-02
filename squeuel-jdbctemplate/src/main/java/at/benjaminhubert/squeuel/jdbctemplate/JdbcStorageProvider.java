@@ -94,7 +94,7 @@ public class JdbcStorageProvider implements StorageProvider {
     }
 
     @Override
-    public boolean lockEvent(Long eventId, LocalDateTime lockUntilUtc) {
+    public boolean lockPartition(Long eventId, LocalDateTime lockUntilUtc) {
         eventId = validateEventId(eventId);
         lockUntilUtc = validateLockUntilUtc(lockUntilUtc);
         deleteOldLockForEvent(eventId);
@@ -134,8 +134,28 @@ public class JdbcStorageProvider implements StorageProvider {
     }
 
     @Override
+    public void unlockPartition(Long eventId) {
+        eventId = validateEventId(eventId);
+
+        String sql = "DELETE FROM " + lockTable + " ldel " +
+                " WHERE EXISTS ( " +
+                "   SELECT l.id FROM " + lockTable + " l " +
+                "   JOIN " + eventTable + " e ON (l.partition = e.partition AND l.queue = e.queue) " +
+                "   WHERE ldel.id = l.id " +
+                "   AND e.id = :event_id " +
+                " )";
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("event_id", eventId);
+        jdbcTemplate.update(sql, params);
+    }
+
+    @Override
     public void markAsProcessed(Long eventId) {
         eventId = validateEventId(eventId);
+        setProcessedFlagForEvent(eventId);
+    }
+
+    private void setProcessedFlagForEvent(Long eventId) {
         String sql = "UPDATE " + eventTable + " SET processed = TRUE WHERE id = :id";
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("id", eventId);
@@ -144,6 +164,7 @@ public class JdbcStorageProvider implements StorageProvider {
 
     @Override
     public void removeProcessedEvents(String queue, LocalDateTime olderThanUtc) {
+        // TODO
     }
 
     private String normalizeString(String value) {

@@ -1,4 +1,4 @@
-package at.benjaminhubert.squeuel.jdbctemplate;
+package at.benjaminhubert.squeuel.testutils;
 
 import java.util.concurrent.atomic.AtomicInteger;
 
