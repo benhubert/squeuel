@@ -59,11 +59,12 @@ public class JdbcStorageProvider implements StorageProvider {
     }
 
     @Override
-    public List<Long> findNextAvailableEvents(String queue, Integer batchSize) {
+    public List<Event> findNextAvailableEvents(String queue, Integer batchSize) {
         queue = validateQueue(queue);
         batchSize = validateBatchSize(batchSize);
 
-        String sql = "SELECT e.id FROM " + eventTable + " e " +
+        String sql = "SELECT e.id, e.queue, e.partition, e.data, e.created_utc, e.processed " +
+                " FROM " + eventTable + " e " +
                 " LEFT OUTER JOIN " + lockTable + " l ON (e.queue = l.queue) " +
                 "                                     AND (e.partition = l.partition) " +
                 " WHERE e.queue = :queue " +
@@ -79,36 +80,17 @@ public class JdbcStorageProvider implements StorageProvider {
                 .addValue("batchSize", batchSize)
                 .addValue("now", Timestamp.valueOf(LocalDateTime.now(Clock.systemUTC())));
 
-        List<Long> ids = jdbcTemplate.query(sql, params, (rs, i) -> {
-            return rs.getLong("id");
+        List<Event> events = jdbcTemplate.query(sql, params, (rs, i) -> {
+            Long eId = rs.getLong("id");
+            String eQueue = rs.getString("queue");
+            String ePartition = rs.getString("partition");
+            String eData = rs.getString("data");
+            LocalDateTime eCreatedUtc = rs.getTimestamp("created_utc").toLocalDateTime();
+            Boolean eProcessed = rs.getBoolean("processed");
+            return new Event(eId, eQueue, ePartition, eData, eCreatedUtc, eProcessed);
         });
 
-        return ids;
-    }
-
-    @Override
-    public Optional<Event> fetchEvent(Long eventId) {
-        eventId = validateEventId(eventId);
-
-        String sql = "SELECT id, queue, partition, created_utc, data, processed " +
-                " FROM " + eventTable + " WHERE id = :id";
-        MapSqlParameterSource params = new MapSqlParameterSource()
-                .addValue("id", eventId);
-
-        try {
-            Event event = jdbcTemplate.queryForObject(sql, params, (rs, i) -> {
-                Long id = rs.getLong("id");
-                String queue = rs.getString("queue");
-                String partition = rs.getString("partition");
-                String data = rs.getString("data");
-                LocalDateTime createdUtc = rs.getTimestamp("created_utc").toLocalDateTime();
-                Boolean processed = rs.getBoolean("processed");
-                return new Event(id, queue, partition, data, createdUtc, processed);
-            });
-            return Optional.ofNullable(event);
-        } catch (EmptyResultDataAccessException e) {
-            return Optional.empty();
-        }
+        return events;
     }
 
     @Override

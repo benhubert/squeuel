@@ -21,19 +21,14 @@ public interface StorageProvider {
      * Searches the database for the next available events which can be
      * processed.
      *
+     * Note that these events need to be locked separately before they can be
+     * handled.
+     *
      * @param queue The queue to find the events in.
      * @param batchSize The maximum number of events to load.
-     * @return A list of event IDs. May be empty but never null.
+     * @return A list of events. May be empty but never null.
      */
-    List<Long> findNextAvailableEvents(String queue, Integer batchSize);
-
-    /**
-     * Fetches the event with the given ID from the database.
-     *
-     * @param eventId The ID of the event to fetch.
-     * @return The event.
-     */
-    Optional<Event> fetchEvent(Long eventId);
+    List<Event> findNextAvailableEvents(String queue, Integer batchSize);
 
     /**
      * Tries to get a lock for the given event. Makes sure that the event is

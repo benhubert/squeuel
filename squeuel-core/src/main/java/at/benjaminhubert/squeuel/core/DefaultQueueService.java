@@ -33,18 +33,21 @@ public class DefaultQueueService implements QueueService {
         if (maxLockTime == null) throw  new IllegalArgumentException("Max lock time is required but was " + maxLockTime);
         if (eventHandler == null) throw new IllegalArgumentException("Event handler is required but was " + eventHandler);
 
-        List<Long> eventIds = storageProvider.findNextAvailableEvents(queue, batchSize);
-        eventIds.forEach(id -> {
+        List<Event> events = storageProvider.findNextAvailableEvents(queue, batchSize);
+        events.forEach(event -> {
+            long starttime = System.currentTimeMillis();
+            LOG.info("TIME       start " + (System.currentTimeMillis() - starttime));
             LocalDateTime lockUntilUtc = LocalDateTime.now(Clock.systemUTC()).plus(maxLockTime);
             try {
-                if (storageProvider.lockEvent(id, lockUntilUtc)) {
-                    Optional<Event> event = storageProvider.fetchEvent(id);
-                    if (!event.isEmpty()) {
-                        eventHandler.handle(event.get());
-                        storageProvider.markAsProcessed(id);
-                    } else {
-                        LOG.error("Seems that the event with the ID {} got removed while I had a lock for it. This should not happen.", id);
-                    }
+                LOG.info("TIME before lock " + (System.currentTimeMillis() - starttime));
+                if (storageProvider.lockEvent(event.getId(), lockUntilUtc)) {
+                    LOG.info("TIME  after lock " + (System.currentTimeMillis() - starttime));
+                    eventHandler.handle(event);
+                    LOG.info("TIME after handl " + (System.currentTimeMillis() - starttime));
+                    storageProvider.markAsProcessed(event.getId());
+                    LOG.info("TIME marked proc " + (System.currentTimeMillis() - starttime));
+                } else {
+                    LOG.info("TIME lock missed " + (System.currentTimeMillis() - starttime));
                 }
             } catch (Exception e) {
                 LOG.error("Failed to process event. Will retry after {}", lockUntilUtc);

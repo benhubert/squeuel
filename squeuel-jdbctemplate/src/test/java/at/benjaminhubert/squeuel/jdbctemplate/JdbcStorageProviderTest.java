@@ -9,7 +9,6 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.testcontainers.containers.PostgreSQLContainer;
-
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Timestamp;
@@ -17,13 +16,11 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Optional;
-
-import static org.exparity.hamcrest.date.LocalDateTimeMatchers.within;
-import static org.hamcrest.MatcherAssert.assertThat;
+import static org.exparity.hamcrest.date.LocalDateTimeMatchers.*;
+import static org.hamcrest.MatcherAssert.*;
 import static org.hamcrest.Matchers.*;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.TestInstance.Lifecycle.PER_CLASS;
+import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.TestInstance.Lifecycle.*;
 
 @TestInstance(PER_CLASS)
 public class JdbcStorageProviderTest {
@@ -173,13 +170,13 @@ public class JdbcStorageProviderTest {
         insertEvent(tables, 5L, "queue_1", "partition_5", "data", now().minus(1, ChronoUnit.MINUTES), false);
 
         // perform
-        List<Long> events = storageProvider.findNextAvailableEvents("queue_1", 3);
+        List<Event> events = storageProvider.findNextAvailableEvents("queue_1", 3);
 
         // check
         assertThat(events, hasSize(3));
-        assertThat(events.get(0), equalTo(1L));
-        assertThat(events.get(1), equalTo(2L));
-        assertThat(events.get(2), equalTo(3L));
+        assertThat(events.get(0).getId(), equalTo(1L));
+        assertThat(events.get(1).getId(), equalTo(2L));
+        assertThat(events.get(2).getId(), equalTo(3L));
     }
 
     @Test
@@ -195,13 +192,13 @@ public class JdbcStorageProviderTest {
         insertLock(tables, 1L, "queue_1", "partition_2", now().plus(1, ChronoUnit.HOURS));
 
         // perform
-        List<Long> events = storageProvider.findNextAvailableEvents("queue_1", 3);
+        List<Event> events = storageProvider.findNextAvailableEvents("queue_1", 3);
 
         // check
         assertThat(events, hasSize(3));
-        assertThat(events.get(0), equalTo(1L));
-        assertThat(events.get(1), equalTo(3L));
-        assertThat(events.get(2), equalTo(4L));
+        assertThat(events.get(0).getId(), equalTo(1L));
+        assertThat(events.get(1).getId(), equalTo(3L));
+        assertThat(events.get(2).getId(), equalTo(4L));
     }
 
     @Test
@@ -216,12 +213,12 @@ public class JdbcStorageProviderTest {
         insertLock(tables, 1L, "queue_1", "partition_2", now().plus(1, ChronoUnit.HOURS));
 
         // perform
-        List<Long> events = storageProvider.findNextAvailableEvents("queue_1", 5);
+        List<Event> events = storageProvider.findNextAvailableEvents("queue_1", 5);
 
         // check
         assertThat(events, hasSize(2));
-        assertThat(events.get(0), equalTo(1L));
-        assertThat(events.get(1), equalTo(3L));
+        assertThat(events.get(0).getId(), equalTo(1L));
+        assertThat(events.get(1).getId(), equalTo(3L));
     }
 
     @Test
@@ -236,15 +233,15 @@ public class JdbcStorageProviderTest {
         insertLock(tables, 1L, "queue_1", "partition_2", LocalDateTime.now(Clock.systemDefaultZone()).plus(1, ChronoUnit.HOURS));
 
         // perform
-        List<Long> eventsOfQueue1 = storageProvider.findNextAvailableEvents("queue_1", 5);
-        List<Long> eventsOfQueue2 = storageProvider.findNextAvailableEvents("queue_2", 5);
+        List<Event> eventsOfQueue1 = storageProvider.findNextAvailableEvents("queue_1", 5);
+        List<Event> eventsOfQueue2 = storageProvider.findNextAvailableEvents("queue_2", 5);
 
         // check
         assertThat(eventsOfQueue1, hasSize(2));
-        assertThat(eventsOfQueue1.get(0), equalTo(1L));
-        assertThat(eventsOfQueue1.get(1), equalTo(4L));
+        assertThat(eventsOfQueue1.get(0).getId(), equalTo(1L));
+        assertThat(eventsOfQueue1.get(1).getId(), equalTo(4L));
         assertThat(eventsOfQueue2, hasSize(1));
-        assertThat(eventsOfQueue2.get(0), equalTo(2L));
+        assertThat(eventsOfQueue2.get(0).getId(), equalTo(2L));
     }
 
     @Test
@@ -257,12 +254,12 @@ public class JdbcStorageProviderTest {
         insertEvent(tables, 3L, "queue_1", "partition_3", "data", now().minus(3, ChronoUnit.MINUTES), false);
 
         // perform
-        List<Long> events = storageProvider.findNextAvailableEvents("queue_1", 5);
+        List<Event> events = storageProvider.findNextAvailableEvents("queue_1", 5);
 
         // check
         assertThat(events, hasSize(2));
-        assertThat(events.get(0), equalTo(2L));
-        assertThat(events.get(1), equalTo(3L));
+        assertThat(events.get(0).getId(), equalTo(2L));
+        assertThat(events.get(1).getId(), equalTo(3L));
     }
 
     @Test
@@ -275,13 +272,13 @@ public class JdbcStorageProviderTest {
         insertEvent(tables, 3L, "queue_1", "partition_3", "data", now().minus(5, ChronoUnit.MINUTES), false);
 
         // perform
-        List<Long> events = storageProvider.findNextAvailableEvents("queue_1", 5);
+        List<Event> events = storageProvider.findNextAvailableEvents("queue_1", 5);
 
         // check
         assertThat(events, hasSize(3));
-        assertThat(events.get(0), equalTo(3L));
-        assertThat(events.get(1), equalTo(1L));
-        assertThat(events.get(2), equalTo(2L));
+        assertThat(events.get(0).getId(), equalTo(3L));
+        assertThat(events.get(1).getId(), equalTo(1L));
+        assertThat(events.get(2).getId(), equalTo(2L));
     }
 
     @Test
@@ -294,12 +291,12 @@ public class JdbcStorageProviderTest {
         insertLock(tables, 1L, "queue_1", "partition_2", now().minus(1, ChronoUnit.HOURS));
 
         // perform
-        List<Long> events = storageProvider.findNextAvailableEvents("queue_1", 5);
+        List<Event> events = storageProvider.findNextAvailableEvents("queue_1", 5);
 
         // check
         assertThat(events, hasSize(2));
-        assertThat(events.get(0), equalTo(1L));
-        assertThat(events.get(1), equalTo(2L));
+        assertThat(events.get(0).getId(), equalTo(1L));
+        assertThat(events.get(1).getId(), equalTo(2L));
     }
 
     @Test
@@ -315,49 +312,6 @@ public class JdbcStorageProviderTest {
         assertThrows(IllegalArgumentException.class, () -> storageProvider.findNextAvailableEvents("queue", 0));
         assertThrows(IllegalArgumentException.class, () -> storageProvider.findNextAvailableEvents("queue", -1));
         assertThrows(IllegalArgumentException.class, () -> storageProvider.findNextAvailableEvents("queue", null));
-    }
-
-    @Test
-    void fetchEvent_fetchesEventFromDatabase() {
-        // prepare
-        DatabaseTables tables = createTables();
-        JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
-        insertEvent(tables, 234L, "queue_1", "partition_1", "data123", now(), true);
-
-        // perform
-        Optional<Event> event = storageProvider.fetchEvent(234L);
-
-        // verify
-        assertThat(event.isPresent(), equalTo(true));
-        assertThat(event.get().getId(), equalTo(234L));
-        assertThat(event.get().getQueue(), equalTo("queue_1"));
-        assertThat(event.get().getPartition(), equalTo("partition_1"));
-        assertThat(event.get().getData(), equalTo("data123"));
-        assertThat(event.get().getCreatedUtc(), within(1, ChronoUnit.MINUTES, now()));
-        assertThat(event.get().getProcessed(), equalTo(true));
-    }
-
-    @Test
-    void fetchEvent_fetchesNothingIfEventDoesNotExist() {
-        // prepare
-        DatabaseTables tables = createTables();
-        JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
-
-        // perform
-        Optional<Event> event = storageProvider.fetchEvent(1L);
-
-        // verify
-        assertThat(event.isPresent(), equalTo(false));
-    }
-
-    @Test
-    void fetchEvent_validatesParameters() {
-        // prepare
-        DatabaseTables tables = createTables();
-        JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
-
-        // perform
-        assertThrows(IllegalArgumentException.class, () -> storageProvider.fetchEvent(null));
     }
 
     @Test
