@@ -38,7 +38,9 @@ public class DefaultQueueService implements QueueService {
         List<Event> events = storageProvider.findNextAvailableEvents(queue, batchSize);
 
         Map<String, List<Event>> eventsByPartition = events.stream().collect(Collectors.groupingBy(Event::getPartition));
-        eventsByPartition.forEach((partition, eventsOfPartition) -> handleEventsOfPartition(eventsOfPartition, maxLockTime, eventHandler));
+        eventsByPartition.entrySet()
+		        .parallelStream()
+		        .forEach(partition -> handleEventsOfPartition(partition.getValue(), maxLockTime, eventHandler));
     }
 
     private void handleEventsOfPartition(List<Event> events, TemporalAmount maxLockTime, EventHandler eventHandler) {

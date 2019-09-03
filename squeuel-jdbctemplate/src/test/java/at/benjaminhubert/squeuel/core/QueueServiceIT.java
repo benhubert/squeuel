@@ -10,8 +10,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInstance;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -56,7 +58,7 @@ public class QueueServiceIT {
 		}
 
 		// perform
-		final ArrayList<Integer> processedEvents = new ArrayList<>();
+		final List<Integer> processedEvents = Collections.synchronizedList(new ArrayList<>());
 		ExecutorService executor = Executors.newFixedThreadPool(numberOfThreads);
 		EventHandler eventHandler = (event) -> {
 			Integer value = Integer.valueOf(event.getData());
@@ -85,6 +87,42 @@ public class QueueServiceIT {
 			assertThat(i, greaterThan(previous));
 			previous = i;
 		}
+	}
+
+	@Test
+	void testHowFastMultipleWorkersProcessEventsOfDifferentPartitions() {
+		int numberOfEvents = 1000;
+		int numberOfThreads = 5;
+
+		// prepare
+		DatabaseTables tables = database.createTables();
+		QueueService queueService = initQueueService(tables);
+		for (int i = 0; i < numberOfEvents; i++) {
+			queueService.enqueue("test_queue", "partition_" + i, "" + i);
+		}
+
+		// perform
+		final List<Integer> processedEvents = Collections.synchronizedList(new ArrayList<>());
+		ExecutorService executor = Executors.newFixedThreadPool(numberOfThreads);
+		EventHandler eventHandler = (event) -> {
+			Integer value = Integer.valueOf(event.getData());
+			processedEvents.add(value);
+		};
+		for (int threadNum = 0; threadNum < numberOfThreads; threadNum++) {
+			executor.execute(() -> {
+				while (true) {
+					queueService.handleNext("test_queue", 20, Duration.ofHours(1L), eventHandler);
+				}
+			});
+		}
+
+		// wait until all events are handled
+		// TODO add timeout
+		while (processedEvents.size() < numberOfEvents) {
+			System.out.println(processedEvents.size() + " events processed. Waiting ...");
+			try { Thread.sleep(1000); } catch (Exception e) {}
+		}
+		executor.shutdownNow();
 	}
 
 }

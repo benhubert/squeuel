@@ -60,6 +60,16 @@ public class Database {
 				"  locked_until_utc TIMESTAMP WITHOUT TIME ZONE NOT NULL, " +
 				"  UNIQUE (queue, partition)  " +
 				" )");
+//		jdbcTemplate.execute("CREATE INDEX ON " + tables.event() + " USING HASH (queue)");
+//		jdbcTemplate.execute("CREATE INDEX ON " + tables.event() + " USING HASH (partition)");
+		jdbcTemplate.execute("CREATE INDEX ON " + tables.event() + " USING BTREE (id)");
+		jdbcTemplate.execute("CREATE INDEX ON " + tables.event() + " USING HASH (queue)");
+		jdbcTemplate.execute("CREATE INDEX ON " + tables.event() + " USING BTREE (queue, partition)");
+		jdbcTemplate.execute("CREATE INDEX ON " + tables.event() + " USING BTREE (created_utc)");
+//		jdbcTemplate.execute("CREATE INDEX ON " + tables.lock() + " USING HASH (queue)");
+//		jdbcTemplate.execute("CREATE INDEX ON " + tables.lock() + " USING HASH (partition)");
+		jdbcTemplate.execute("CREATE INDEX ON " + tables.lock() + " USING BTREE (queue, partition)");
+		jdbcTemplate.execute("CREATE INDEX ON " + tables.lock() + " USING BTREE (locked_until_utc)");
 		return tables;
 	}
 
