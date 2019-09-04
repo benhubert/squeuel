@@ -3,16 +3,13 @@ package at.benjaminhubert.squeuel.jdbctemplate;
 import at.benjaminhubert.squeuel.core.Event;
 import at.benjaminhubert.squeuel.core.StorageProvider;
 import org.springframework.dao.DataIntegrityViolationException;
-import org.springframework.dao.EmptyResultDataAccessException;
-import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
-
+import javax.sql.DataSource;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
 
 
 public class JdbcStorageProvider implements StorageProvider {
@@ -24,10 +21,10 @@ public class JdbcStorageProvider implements StorageProvider {
     private final String eventTable;
     private final String lockTable;
 
-    public JdbcStorageProvider(JdbcTemplate jdbcTemplate,
+    public JdbcStorageProvider(DataSource dataSource,
                                String eventTable,
                                String lockTable) {
-        this.jdbcTemplate = new NamedParameterJdbcTemplate(jdbcTemplate);
+        this.jdbcTemplate = new NamedParameterJdbcTemplate(dataSource);
         this.eventTable = eventTable;
         this.lockTable = lockTable;
     }

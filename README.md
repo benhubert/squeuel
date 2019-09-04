@@ -22,9 +22,17 @@ Refer to the javadoc of QueueService for more details about all features.
 
 What this project is not
 --------------------------
-This is not a JMS implementation. It's intended to be much simpler.
+This is _not_ a JMS implementation. It's intended to be much simpler.
 
-This library does not include any scheduling. It only provides methods for
+While it can deal with multiple instances, it is _not_ intended to be used by
+high performance 
+
+This is _not_ a blazing fast queue. Depending on the database performance, on
+the usage in your application and on the number of workers handling events, it
+might handle some tens of events per second. In some cases even up to 100 events
+per second, but don't expect much more from it. 
+
+This library does _not_ include any scheduling. It only provides methods for
 polling a database table. It is on the developer using this library, to care
 about how and how often this polling is performed.
 
@@ -68,7 +76,3 @@ following Spring beans in your context:
     public QueueService squeuelQueueService(StorageProvider storageProvider) {
         return new DefaultQueueService(storageProvider);
     }
-
-Open tasks
-------------
-  * Think about useful indices

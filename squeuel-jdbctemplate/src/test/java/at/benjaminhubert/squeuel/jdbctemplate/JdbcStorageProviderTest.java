@@ -37,7 +37,7 @@ public class JdbcStorageProviderTest {
     }
 
     private JdbcStorageProvider initializeStorageProvider(DatabaseTables tables) {
-        return new JdbcStorageProvider(database.getJdbcTemplate(), tables.event(), tables.lock());
+        return new JdbcStorageProvider(database.getDataSource(), tables.event(), tables.lock());
     }
 
     @Test

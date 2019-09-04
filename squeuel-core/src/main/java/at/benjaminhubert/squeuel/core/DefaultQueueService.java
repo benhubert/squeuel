@@ -39,7 +39,7 @@ public class DefaultQueueService implements QueueService {
 
         Map<String, List<Event>> eventsByPartition = events.stream().collect(Collectors.groupingBy(Event::getPartition));
         eventsByPartition.entrySet()
-		        .parallelStream()
+		        .stream()
 		        .forEach(partition -> handleEventsOfPartition(partition.getValue(), maxLockTime, eventHandler));
     }
 

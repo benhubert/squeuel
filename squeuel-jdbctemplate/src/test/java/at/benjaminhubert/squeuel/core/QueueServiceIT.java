@@ -41,7 +41,7 @@ public class QueueServiceIT {
 	}
 
 	private QueueService initQueueService(DatabaseTables tables) {
-		JdbcStorageProvider storageProvider = new JdbcStorageProvider(database.getJdbcTemplate(), tables.event(), tables.lock());
+		JdbcStorageProvider storageProvider = new JdbcStorageProvider(database.getDataSource(), tables.event(), tables.lock());
 		return new DefaultQueueService(storageProvider);
 	}
 
@@ -68,6 +68,7 @@ public class QueueServiceIT {
 			executor.execute(() -> {
 				while (true) {
 					queueService.handleNext("test_queue", 20, Duration.ofHours(1L), eventHandler);
+					try { Thread.sleep(200); } catch (Exception e) {}
 				}
 			});
 		}
@@ -76,7 +77,7 @@ public class QueueServiceIT {
 		// TODO add timeout
 		while (processedEvents.size() < numberOfEvents) {
 			System.out.println(processedEvents.size() + " events processed. Waiting ...");
-			try { Thread.sleep(1000); } catch (Exception e) {}
+			try { Thread.sleep(500); } catch (Exception e) {}
 		}
 		executor.shutdownNow();
 
@@ -92,7 +93,7 @@ public class QueueServiceIT {
 	@Test
 	void testHowFastMultipleWorkersProcessEventsOfDifferentPartitions() {
 		int numberOfEvents = 1000;
-		int numberOfThreads = 5;
+		int numberOfThreads = 4;
 
 		// prepare
 		DatabaseTables tables = database.createTables();
@@ -112,6 +113,7 @@ public class QueueServiceIT {
 			executor.execute(() -> {
 				while (true) {
 					queueService.handleNext("test_queue", 20, Duration.ofHours(1L), eventHandler);
+					try { Thread.sleep(50); } catch (Exception e) {}
 				}
 			});
 		}
@@ -120,7 +122,7 @@ public class QueueServiceIT {
 		// TODO add timeout
 		while (processedEvents.size() < numberOfEvents) {
 			System.out.println(processedEvents.size() + " events processed. Waiting ...");
-			try { Thread.sleep(1000); } catch (Exception e) {}
+			try { Thread.sleep(500); } catch (Exception e) {}
 		}
 		executor.shutdownNow();
 	}
