@@ -1,0 +1,26 @@
+name: deploy artifacts to github packages
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Set up JDK 11
+      uses: actions/setup-java@v1
+      with:
+        java-version: 11
+    - name: Build & test everything
+      run: mvn -B package
+    - name: Deploy to github packages
+      run: mvn -B --settings .github/deploy.settings.xml -DaltDeploymentRepository=github-squeuel::https://maven.pkg.github.com/benhubert/squeuel deploy
+      env:
+        RELEASE_REPO_USERNAME: benhubert
+        RELEASE_REPO_PASSWORD: ${{secrets.DEPLOY_TOKEN}}
+
