@@ -10,7 +10,7 @@
 		<version>0.2.0</version>
 	</parent>
 
-	<artifactId>squeuel-metrcics-micrometer</artifactId>
+	<artifactId>squeuel-metrics-micrometer</artifactId>
 
 	<name>squeuel metrics exposed via micrometer</name>
 
