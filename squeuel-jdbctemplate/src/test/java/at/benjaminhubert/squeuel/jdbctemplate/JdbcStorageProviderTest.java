@@ -1,6 +1,7 @@
 package at.benjaminhubert.squeuel.jdbctemplate;
 
 import at.benjaminhubert.squeuel.core.Event;
+import at.benjaminhubert.squeuel.core.QueueStats;
 import at.benjaminhubert.squeuel.testutils.Database;
 import at.benjaminhubert.squeuel.testutils.DatabaseTables;
 import org.junit.jupiter.api.AfterAll;
@@ -15,6 +16,7 @@ import java.time.Clock;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.Map;
 import static org.exparity.hamcrest.date.LocalDateTimeMatchers.*;
 import static org.hamcrest.MatcherAssert.*;
 import static org.hamcrest.Matchers.*;
@@ -433,6 +435,78 @@ public class JdbcStorageProviderTest {
     }
 
     // TODO Test removeProcessedEvents
+
+    @Test
+    void listQueues_calculatesCorrectNumberOfProcessedEvents() {
+        // prepare
+        DatabaseTables tables = database.createTables();
+        JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
+        insertEvent(tables, 1L, "queue_1", "partition_1", "data", now().minus(5, ChronoUnit.MINUTES), true);
+        insertEvent(tables, 2L, "queue_2", "partition_2", "data", now().minus(4, ChronoUnit.MINUTES), false);
+        insertEvent(tables, 3L, "queue_2", "partition_2", "data", now().minus(4, ChronoUnit.MINUTES), false);
+        insertEvent(tables, 4L, "queue_1", "partition_2", "data", now().minus(3, ChronoUnit.MINUTES), true);
+        insertEvent(tables, 5L, "queue_1", "partition_1", "data", now().minus(2, ChronoUnit.MINUTES), false);
+
+        // perform
+        Map<String, QueueStats> stats = storageProvider.listQueues();
+
+        // check
+        assertThat(stats.entrySet(), hasSize(2));
+        assertThat(stats.get("queue_1").getNumberOfProcessedEvents(), equalTo(2L));
+        assertThat(stats.get("queue_1").getNumberOfWaitingEvents(), equalTo(1L));
+        assertThat(stats.get("queue_2").getNumberOfProcessedEvents(), equalTo(0L));
+        assertThat(stats.get("queue_2").getNumberOfWaitingEvents(), equalTo(2L));
+    }
+
+    @Test
+    void listQueues_calculatesCorrectNumberOfPartitions() {
+        // prepare
+        DatabaseTables tables = database.createTables();
+        JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
+        insertEvent(tables, 1L, "queue_1", "partition_1", "data", now().minus(5, ChronoUnit.MINUTES), false);
+        insertEvent(tables, 2L, "queue_2", "partition_2", "data", now().minus(4, ChronoUnit.MINUTES), false);
+        insertEvent(tables, 3L, "queue_2", "partition_2", "data", now().minus(4, ChronoUnit.MINUTES), false);
+        insertEvent(tables, 4L, "queue_1", "partition_2", "data", now().minus(3, ChronoUnit.MINUTES), false);
+        insertEvent(tables, 5L, "queue_1", "partition_1", "data", now().minus(2, ChronoUnit.MINUTES), false);
+
+        // perform
+        Map<String, QueueStats> stats = storageProvider.listQueues();
+
+        // check
+        assertThat(stats.entrySet(), hasSize(2));
+        assertThat(stats.get("queue_1").getNumberOfPartitions(), equalTo(2L));
+        assertThat(stats.get("queue_2").getNumberOfPartitions(), equalTo(1L));
+    }
+
+    @Test
+    void listQueues_returnsExpectedDateForOldestWaitingEvent() {
+        // prepare
+        DatabaseTables tables = database.createTables();
+        JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
+        LocalDateTime t5MinutesAgo = now().minus(5, ChronoUnit.MINUTES);
+        LocalDateTime t4MinutesAgo = now().minus(5, ChronoUnit.MINUTES);
+        LocalDateTime t3MinutesAgo = now().minus(5, ChronoUnit.MINUTES);
+        LocalDateTime t2MinutesAgo = now().minus(5, ChronoUnit.MINUTES);
+        LocalDateTime t1MinutesAgo = now().minus(5, ChronoUnit.MINUTES);
+        insertEvent(tables, 1L, "queue_1", "partition_1", "data", t5MinutesAgo, true);
+        insertEvent(tables, 2L, "queue_2", "partition_2", "data", t4MinutesAgo, false);
+        insertEvent(tables, 3L, "queue_2", "partition_2", "data", t3MinutesAgo, false);
+        insertEvent(tables, 4L, "queue_1", "partition_2", "data", t2MinutesAgo, true);
+        insertEvent(tables, 5L, "queue_1", "partition_1", "data", t1MinutesAgo, false);
+        insertEvent(tables, 6L, "queue_3", "partition_2", "data", t2MinutesAgo, true);
+        insertEvent(tables, 7L, "queue_3", "partition_1", "data", t1MinutesAgo, true);
+
+        // perform
+        Map<String, QueueStats> stats = storageProvider.listQueues();
+
+        // check
+        assertThat(stats.entrySet(), hasSize(3));
+        assertThat(stats.get("queue_1").getTimestampOfOldestQueuedEventUtc().isPresent(), equalTo(true));
+        assertThat(stats.get("queue_1").getTimestampOfOldestQueuedEventUtc().get(), equalTo(t1MinutesAgo));
+        assertThat(stats.get("queue_2").getTimestampOfOldestQueuedEventUtc().isPresent(), equalTo(true));
+        assertThat(stats.get("queue_2").getTimestampOfOldestQueuedEventUtc().get(), equalTo(t4MinutesAgo));
+        assertThat(stats.get("queue_3").getTimestampOfOldestQueuedEventUtc().isPresent(), equalTo(false));
+    }
 
     private LocalDateTime now() {
         return LocalDateTime.now(Clock.systemUTC());

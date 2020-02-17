@@ -2,7 +2,7 @@ package at.benjaminhubert.squeuel.core;
 
 import java.time.LocalDateTime;
 import java.util.List;
-import java.util.Optional;
+import java.util.Map;
 
 public interface StorageProvider {
 
@@ -63,5 +63,13 @@ public interface StorageProvider {
      *                     this timestamp will be removed.
      */
     void removeProcessedEvents(String queue, LocalDateTime olderThanUtc);
+
+    /**
+     * Returns the list of queues, which are currently part of the system.
+     *
+     * @return The list of all queues with the number of currently enqueued
+     * events. May be empty, but never null.
+     */
+    Map<String, QueueStats> listQueues();
 
 }
