@@ -1,5 +1,5 @@
-SQL backed Message Queue
-==========================
+squeuel — SQL backed Message Queue
+====================================
 A simple, lightweight, reliable event queue which persists and coordinates all
 events in a any standard SQL database.
 
@@ -56,19 +56,27 @@ Create two tables with the following fields in your database:
         UNIQUE (queue, partition) 
     );
 
-Create your instance of `QueueService`. For a Spring application, register the
-following Spring beans in your context:
+Add the dependency for _squeuel_ to your pom.xml:
+
+    <repositories>
+        <repository>
+            <id>jitpack.io</id>
+            <url>https://jitpack.io</url>
+        </repository>
+    </repositories>
+    <dependency>
+        <groupId>com.github.benhubert.squeuel</groupId>
+        <artifactId>squeuel-jdbctemplate</artifactId>
+        <version>0.2.0</version>
+    </dependency>
+
+While _squeuel_ should work in any other environment too, for Spring Boot you
+can configure the following beans:
 
     @Bean
-    public JdbcTemplate squeuelJdbcTemplate() {
-        // Create your instance of the JDBC template which is connected to your
-        // database.
-    }
-    
-    @Bean
     @Autowired
-    public StorageProvider squeuelStorageProvider(JdbcTemplate jdbcTemplate) {
-        return new JdbcStorageProvider(jdbcTemplate, "squeuel_events", "squeuel_locks");
+    public StorageProvider squeuelStorageProvider(DataSource dataSource) {
+        return new JdbcStorageProvider(dataSource, "squeuel_event", "squeuel_event_lock");
     }
     
     @Bean
@@ -76,3 +84,28 @@ following Spring beans in your context:
     public QueueService squeuelQueueService(StorageProvider storageProvider) {
         return new DefaultQueueService(storageProvider);
     }
+
+If you want to monitor _squeuel_'s activity, this library also provides an
+integration for Micrometer:
+
+    @Bean
+    @Autowired
+    public SqueuelMeterBinder squeuelMeterBinder(QueueService queueService) {
+        return new SqueuelMeterBinder(queueService);
+    }
+
+Now that you have your `QueueService` ready, you can use it in your applications
+code. To push events to a queue, simply call
+
+    queueService.enqueue(queueName, partition, serializedData);
+
+To handle enqueued events, use
+
+    queueService.handleNext(queueName, batchSize, maxLockTime, this::handlePersistedEvent);
+
+To clean up old and processed events, use
+
+    squeuelEventQueue.cleanup(queue, removeUntilUtc);
+
+Squeuel does not provide any scheduling mechanism. Use the scheduling mechanism
+of your choice to call the above methods periodically.

@@ -484,10 +484,10 @@ public class JdbcStorageProviderTest {
         DatabaseTables tables = database.createTables();
         JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
         LocalDateTime t5MinutesAgo = now().minus(5, ChronoUnit.MINUTES);
-        LocalDateTime t4MinutesAgo = now().minus(5, ChronoUnit.MINUTES);
-        LocalDateTime t3MinutesAgo = now().minus(5, ChronoUnit.MINUTES);
-        LocalDateTime t2MinutesAgo = now().minus(5, ChronoUnit.MINUTES);
-        LocalDateTime t1MinutesAgo = now().minus(5, ChronoUnit.MINUTES);
+        LocalDateTime t4MinutesAgo = now().minus(4, ChronoUnit.MINUTES);
+        LocalDateTime t3MinutesAgo = now().minus(3, ChronoUnit.MINUTES);
+        LocalDateTime t2MinutesAgo = now().minus(2, ChronoUnit.MINUTES);
+        LocalDateTime t1MinutesAgo = now().minus(1, ChronoUnit.MINUTES);
         insertEvent(tables, 1L, "queue_1", "partition_1", "data", t5MinutesAgo, true);
         insertEvent(tables, 2L, "queue_2", "partition_2", "data", t4MinutesAgo, false);
         insertEvent(tables, 3L, "queue_2", "partition_2", "data", t3MinutesAgo, false);
@@ -506,6 +506,69 @@ public class JdbcStorageProviderTest {
         assertThat(stats.get("queue_2").getTimestampOfOldestQueuedEventUtc().isPresent(), equalTo(true));
         assertThat(stats.get("queue_2").getTimestampOfOldestQueuedEventUtc().get(), equalTo(t4MinutesAgo));
         assertThat(stats.get("queue_3").getTimestampOfOldestQueuedEventUtc().isPresent(), equalTo(false));
+    }
+
+    @Test
+    void removeProcessedEvents_deletesWantedAndKeepsUnprocessedOrNewerEvents() {
+        // prepare
+        DatabaseTables tables = database.createTables();
+        JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
+        LocalDateTime t5MinutesAgo = now().minus(5, ChronoUnit.MINUTES);
+        LocalDateTime t4MinutesAgo = now().minus(4, ChronoUnit.MINUTES);
+        LocalDateTime t3MinutesAgo = now().minus(3, ChronoUnit.MINUTES);
+        LocalDateTime t2MinutesAgo = now().minus(2, ChronoUnit.MINUTES);
+        LocalDateTime t1MinutesAgo = now().minus(1, ChronoUnit.MINUTES);
+        insertEvent(tables, 1L, "queue_1", "partition_1", "data", t5MinutesAgo, true);  // delete
+        insertEvent(tables, 2L, "queue_2", "partition_2", "data", t4MinutesAgo, false); // keep
+        insertEvent(tables, 3L, "queue_2", "partition_2", "data", t3MinutesAgo, false); // keep
+        insertEvent(tables, 4L, "queue_1", "partition_2", "data", t2MinutesAgo, true);  // keep
+        insertEvent(tables, 5L, "queue_1", "partition_1", "data", t1MinutesAgo, false); // keep
+        insertEvent(tables, 6L, "queue_3", "partition_2", "data", t4MinutesAgo, true);  // delete
+        insertEvent(tables, 7L, "queue_3", "partition_1", "data", t3MinutesAgo, true);  // keep
+
+        // perform
+        storageProvider.removeProcessedEvents("queue_1", t3MinutesAgo);
+        // check
+        List<EventRow> events = fetchEventsFromDatabase(tables);
+        assertThat(events, hasSize(6));
+        assertThat(events.stream().anyMatch(e -> e.id.equals(1L)), is(false));
+
+        // perform
+        storageProvider.removeProcessedEvents("queue_2", t3MinutesAgo);
+        // check
+        events = fetchEventsFromDatabase(tables);
+        assertThat(events, hasSize(6));
+
+        // perform
+        storageProvider.removeProcessedEvents("queue_3", t3MinutesAgo);
+        // check
+        events = fetchEventsFromDatabase(tables);
+        assertThat(events, hasSize(5));
+        assertThat(events.stream().anyMatch(e -> e.id.equals(6L)), is(false));
+    }
+
+    @Test
+    void removeProcessedEvents_withDateInFutureRemovesAllProcessedEvents() {
+        // prepare
+        DatabaseTables tables = database.createTables();
+        JdbcStorageProvider storageProvider = initializeStorageProvider(tables);
+        LocalDateTime t5MinutesAgo = now().minus(5, ChronoUnit.MINUTES);
+        LocalDateTime t2MinutesAgo = now().minus(2, ChronoUnit.MINUTES);
+        LocalDateTime t1MinutesAgo = now().minus(1, ChronoUnit.MINUTES);
+        LocalDateTime t9MinutesInTheFuture = now().plus(9, ChronoUnit.MINUTES);
+        insertEvent(tables, 1L, "queue_1", "partition_1", "data", t5MinutesAgo, true);  // delete
+        insertEvent(tables, 2L, "queue_1", "partition_2", "data", t2MinutesAgo, true);  // delete
+        insertEvent(tables, 3L, "queue_1", "partition_1", "data", t1MinutesAgo, false); // keep
+
+        // perform
+        storageProvider.removeProcessedEvents("queue_1", t9MinutesInTheFuture);
+
+        // check
+        List<EventRow> events = fetchEventsFromDatabase(tables);
+        assertThat(events, hasSize(1));
+        assertThat(events.stream().anyMatch(e -> e.id.equals(1L)), is(false));
+        assertThat(events.stream().anyMatch(e -> e.id.equals(2L)), is(false));
+        assertThat(events.stream().anyMatch(e -> e.id.equals(3L)), is(true));
     }
 
     private LocalDateTime now() {

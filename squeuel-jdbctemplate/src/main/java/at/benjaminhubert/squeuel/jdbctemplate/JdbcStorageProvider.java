@@ -165,7 +165,17 @@ public class JdbcStorageProvider implements StorageProvider {
 
     @Override
     public void removeProcessedEvents(String queue, LocalDateTime olderThanUtc) {
-        // TODO
+        queue = validateQueue(queue);
+        olderThanUtc = validateRemoveOlderThanUtc(olderThanUtc);
+
+        String sql = "DELETE FROM " + eventTable + " e " +
+                " WHERE e.queue = :queue " +
+                " AND e.processed = TRUE " +
+                " AND created_utc < :created_utc ";
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("queue", queue)
+                .addValue("created_utc", Timestamp.valueOf(olderThanUtc));
+        jdbcTemplate.update(sql, params);
     }
 
     @Override
@@ -305,6 +315,11 @@ public class JdbcStorageProvider implements StorageProvider {
         if (lockUntilUtc == null) throw new IllegalArgumentException("Timestamp until event should be locked is required but was null");
         if (lockUntilUtc.isBefore(LocalDateTime.now(Clock.systemUTC()))) throw new IllegalArgumentException("Timestamp until event should be locked must be in the future");
         return lockUntilUtc;
+    }
+
+    private LocalDateTime validateRemoveOlderThanUtc(LocalDateTime olderThanUtc) {
+        if (olderThanUtc == null) throw new IllegalArgumentException("Timestamp until event should be locked is required but was null");
+        return olderThanUtc;
     }
 
 }
