@@ -95,8 +95,8 @@ public class SqueuelMeterBinder implements MeterBinder, MetricsRecorder {
 	}
 
 	@Override
-	public void recordEventFailed(String queue) {
-		forQueue(queue).ifPresent(m -> m.eventHandledFailedCounter.increment());
+	public void recordEventFailed(String queue, long durationNanos) {
+		forQueue(queue).ifPresent(m -> m.eventHandledFailedTimer.record(durationNanos, TimeUnit.NANOSECONDS));
 	}
 
 	@Override
@@ -128,7 +128,7 @@ public class SqueuelMeterBinder implements MeterBinder, MetricsRecorder {
 
 		final Counter eventEnqueuedCounter;
 		final Counter batchHandledCounter;
-		final Counter eventHandledFailedCounter;
+		final Timer eventHandledFailedTimer;
 		final Timer eventHandledSuccessTimer;
 		final Counter partitionlockRejectedCounter;
 		final Counter partitionlockReleasedCounter;
@@ -142,7 +142,7 @@ public class SqueuelMeterBinder implements MeterBinder, MetricsRecorder {
 			batchHandledCounter = Counter.builder("squeuel.handled.batch")
 					.tag("queue", queue)
 					.register(registry);
-			eventHandledFailedCounter = Counter.builder("squeuel.handled.event")
+			eventHandledFailedTimer = Timer.builder("squeuel.handled.event")
 					.tag("queue", queue)
 					.tag("result", "failed")
 					.register(registry);

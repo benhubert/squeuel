@@ -16,7 +16,7 @@ public class DefaultMetricsRecorder implements MetricsRecorder {
 	}
 
 	@Override
-	public void recordEventFailed(String queue) {
+	public void recordEventFailed(String queue, long durationNanos) {
 		// do nothing
 	}
 

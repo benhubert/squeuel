@@ -9,7 +9,7 @@ public interface MetricsRecorder {
 
 	void recordHandleNext(String queue, int size);
 
-	void recordEventFailed(String queue);
+	void recordEventFailed(String queue, long durationNanos);
 
 	void recordEventHandled(String queue, long durationNanos);
 

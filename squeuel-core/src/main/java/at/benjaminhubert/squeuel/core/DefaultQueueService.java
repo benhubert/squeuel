@@ -59,16 +59,21 @@ public class DefaultQueueService implements QueueService {
                 metricsRecorder.recordPartitionLockRejected(queue);
             }
         } catch (Exception e) {
-            metricsRecorder.recordEventFailed(queue);
             LOG.error("Failed to process an event in partition {}. Will retry after {}", partition, lockUntilUtc);
         }
     }
 
     private void handleEvent(String queue, EventHandler eventHandler, Event event) {
         long start = System.nanoTime();
-        eventHandler.handle(event);
-        long durationNanos = System.nanoTime() - start;
-        metricsRecorder.recordEventHandled(queue, durationNanos);
+        try {
+            eventHandler.handle(event);
+            long durationNanos = System.nanoTime() - start;
+            metricsRecorder.recordEventHandled(queue, durationNanos);
+        } catch (Exception e) {
+            long durationNanos = System.nanoTime() - start;
+            metricsRecorder.recordEventFailed(queue, durationNanos);
+            throw e;
+        }
     }
 
     @Override
