@@ -2,6 +2,7 @@ package at.benjaminhubert.squeuel.core;
 
 import java.time.LocalDateTime;
 import java.time.temporal.TemporalAmount;
+import java.util.Map;
 
 public interface QueueService {
 
@@ -49,5 +50,21 @@ public interface QueueService {
      *                     timestamp will be removed.
      */
     void cleanup(String queue, LocalDateTime olderThanUtc);
+
+    /**
+     * Returns the list of queues, which are currently part of the system.
+     *
+     * @return The list of all queues with the number of currently enqueued
+     * events. May be empty, but never null.
+     */
+    Map<String, QueueStats> listQueues();
+
+    /**
+     * Replaces any previously registered {@link MetricsRecorder} with the given
+     * one.
+     *
+     * @param metricsRecorder The new {@link MetricsRecorder}. Must not be null.
+     */
+    void replaceMetricsRecorder(MetricsRecorder metricsRecorder);
 
 }

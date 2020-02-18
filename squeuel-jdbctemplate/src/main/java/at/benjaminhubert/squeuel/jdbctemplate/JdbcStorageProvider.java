@@ -1,6 +1,7 @@
 package at.benjaminhubert.squeuel.jdbctemplate;
 
 import at.benjaminhubert.squeuel.core.Event;
+import at.benjaminhubert.squeuel.core.QueueStats;
 import at.benjaminhubert.squeuel.core.StorageProvider;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
@@ -9,7 +10,10 @@ import javax.sql.DataSource;
 import java.sql.Timestamp;
 import java.time.Clock;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 
 public class JdbcStorageProvider implements StorageProvider {
@@ -162,6 +166,103 @@ public class JdbcStorageProvider implements StorageProvider {
     @Override
     public void removeProcessedEvents(String queue, LocalDateTime olderThanUtc) {
         // TODO
+    }
+
+    @Override
+    public Map<String, QueueStats> listQueues() {
+
+        Map<String, QueueStats.Builder> queueStatsBuilders = new HashMap<>();
+
+        fetchProcessedStats().forEach((stats) -> {
+            QueueStats.Builder builder = queueStatsBuilders.get(stats.queue);
+            if (builder == null) {
+                builder = new QueueStats.Builder();
+                queueStatsBuilders.put(stats.queue, builder);
+            }
+            if (stats.processed) {
+                builder.withNumberOfProcessedEvents(stats.count);
+            } else {
+                builder.withNumberOfWaitingEvents(stats.count);
+            }
+        });
+
+        fetchPartitionStats().forEach((stats) -> {
+            QueueStats.Builder builder = queueStatsBuilders.get(stats.queue);
+            if (builder == null) {
+                builder = new QueueStats.Builder();
+                queueStatsBuilders.put(stats.queue, builder);
+            }
+            builder.withNumberOfPartitions(stats.count);
+        });
+
+        fetchTimestampStats().forEach((stats) -> {
+            QueueStats.Builder builder = queueStatsBuilders.get(stats.queue);
+            if (builder == null) {
+                builder = new QueueStats.Builder();
+                queueStatsBuilders.put(stats.queue, builder);
+            }
+            builder.withTimestampOfOldestQueuedEventUtc(stats.oldestQueuedEventUtc);
+        });
+
+        return queueStatsBuilders.entrySet().stream()
+                .collect(Collectors.toMap(
+                        e -> e.getKey(),
+                        e -> e.getValue().build()
+                ));
+    }
+
+    private List<ProcessedStats> fetchProcessedStats() {
+        String sql = "SELECT e.queue, e.processed, COUNT(e.id) AS count " +
+                " FROM " + eventTable + " e " +
+                " GROUP BY (e.queue, e.processed) ";
+        return jdbcTemplate.query(sql, (rs, i) -> {
+            ProcessedStats stats = new ProcessedStats();
+            stats.queue = rs.getString("queue");
+            stats.processed = rs.getBoolean("processed");
+            stats.count = rs.getLong("count");
+            return stats;
+        });
+    }
+
+    private static class ProcessedStats {
+        String queue;
+        Boolean processed;
+        Long count;
+    }
+
+    private List<PartitionStats> fetchPartitionStats() {
+        String sql = "SELECT e.queue, COUNT(DISTINCT e.partition) AS count " +
+                " FROM " + eventTable + " e " +
+                " GROUP BY (e.queue) ";
+        return jdbcTemplate.query(sql, (rs, i) -> {
+            PartitionStats stats = new PartitionStats();
+            stats.queue = rs.getString("queue");
+            stats.count = rs.getLong("count");
+            return stats;
+        });
+    }
+
+    private static class PartitionStats {
+        String queue;
+        Long count;
+    }
+
+    private List<TimestampStats> fetchTimestampStats() {
+        String sql = "SELECT e.queue, MIN(created_utc) AS created_utc " +
+                " FROM " + eventTable + " e " +
+                " WHERE e.processed = FALSE " +
+                " GROUP BY (e.queue) ";
+        return jdbcTemplate.query(sql, (rs, i) -> {
+            TimestampStats stats = new TimestampStats();
+            stats.queue = rs.getString("queue");
+            stats.oldestQueuedEventUtc = rs.getTimestamp("created_utc").toLocalDateTime();
+            return stats;
+        });
+    }
+
+    private static class TimestampStats {
+        String queue;
+        LocalDateTime oldestQueuedEventUtc;
     }
 
     private String normalizeString(String value) {
