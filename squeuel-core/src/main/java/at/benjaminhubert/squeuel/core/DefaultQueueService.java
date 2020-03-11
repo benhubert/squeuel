@@ -59,7 +59,7 @@ public class DefaultQueueService implements QueueService {
                 metricsRecorder.recordPartitionLockRejected(queue);
             }
         } catch (Exception e) {
-            LOG.error("Failed to process an event in partition {}. Will retry after {}", partition, lockUntilUtc);
+            LOG.error("Failed to process an event in partition {}. Will retry after {}", partition, lockUntilUtc, e);
         }
     }
 
