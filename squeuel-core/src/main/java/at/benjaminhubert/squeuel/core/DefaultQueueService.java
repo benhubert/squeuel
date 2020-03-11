@@ -49,10 +49,10 @@ public class DefaultQueueService implements QueueService {
         try {
             if (storageProvider.lockPartition(firstEvent.getId(), lockUntilUtc)) {
                 metricsRecorder.recordPartitionLockAquired(queue, events.size());
-                events.forEach((event) -> {
+                for (Event event : events) {
                     handleEvent(queue, eventHandler, event);
                     storageProvider.markAsProcessed(event.getId());
-                });
+                }
                 storageProvider.unlockPartition(firstEvent.getId());
                 metricsRecorder.recordPartitionLockReleased(queue);
             } else {
@@ -63,7 +63,7 @@ public class DefaultQueueService implements QueueService {
         }
     }
 
-    private void handleEvent(String queue, EventHandler eventHandler, Event event) {
+    private void handleEvent(String queue, EventHandler eventHandler, Event event) throws Exception{
         long start = System.nanoTime();
         try {
             eventHandler.handle(event);
